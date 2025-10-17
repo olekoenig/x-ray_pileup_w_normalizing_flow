@@ -1,6 +1,13 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import os
+import torch
+from astropy.io import fits
+
+from config import SIXTEConfig, ModelConfig, MLConfig
+sixte_config = SIXTEConfig()
+model_config = ModelConfig()
+ml_config = MLConfig()
 
 plt.rcParams['text.usetex'] = True
 plt.rcParams['text.latex.preamble'] = r'\usepackage{amsmath}'
@@ -31,7 +38,9 @@ def plot_loss(metadata, label = "Loss"):
 
     axes[-1].set_xlabel('Epoch')
     plt.tight_layout()
-    plt.savefig('loss.pdf')
+    outfile = "loss.pdf"
+    print("Wrote to {}".format(outfile))
+    plt.savefig(outfile)
 
 def _setup_plot(plot_input_data_only = False):
     if plot_input_data_only == True:
@@ -88,10 +97,9 @@ def _write_pha_file(channels, predicted_output, output_fname):
     hdulist = fits.HDUList([primary_hdu, table_hdu])
     hdulist.writeto(output_fname, overwrite=True)
 
-
 def evaluate_on_test_spectrum(model, test_dataset, phafile = False, plot_input_data_only = False):
     if phafile == False:
-        indices = [int(random.uniform(0, len(test_dataset)-1)) for _ in range(20)]
+        indices = [int(np.random.uniform(0, len(test_dataset)-1)) for _ in range(20)]
     else:
         indices = [test_dataset.index_of_input(phafile)]
         
@@ -133,6 +141,48 @@ def evaluate_on_test_spectrum(model, test_dataset, phafile = False, plot_input_d
         plt.savefig(outfile)
 
     if phafile == False:
-        _unite_pdfs(outfiles)
+        unite_pdfs(outfiles)
     else:
         print("Wrote {}".format(*outfiles))
+
+def plot_parameter_distributions(targets):
+    fig, axes = plt.subplots(1, 3, figsize=(15, 4), sharey=True)
+
+    colors = ['blue', 'green', 'red']
+
+    for ii in range(3):
+        if ii == 1:
+            data_min = targets[:, ii].min()
+            data_max = targets[:, ii].max()
+            bins = np.logspace(np.log10(data_min), np.log10(data_max), 51)
+            axes[ii].set_xscale('log')
+        else:
+            bins = 50
+
+        axes[ii].set_ylim(0, 300)
+        axes[ii].hist(targets[:, ii], bins=bins, alpha=0.7, color=colors[ii], edgecolor='black')
+
+        axes[ii].set_xlabel(model_config.names[ii])
+
+    axes[0].set_ylabel('Number of samples')
+    return fig
+
+def print_dataset_statistics(targets):
+    print(f"\nParameter Statistics:")
+    print("=" * 50)
+    print(f"Number of samples: {len(targets)}")
+
+    for ii, name in enumerate(model_config.names):
+        values = targets[:, ii]
+        print(f"\n{name} range: {values.min()} - {values.max()}")
+
+def visualize_training_dataset(train_dataset):
+    _, targets = next(iter(train_dataset))
+    targets[:, 1] *= ml_config.flux_factor
+
+    print_dataset_statistics(targets)
+    #fig1 = plot_dataset_parameter_space(targets, show_projections=True)
+    #plt.show()
+    fig2 = plot_parameter_distributions(targets)
+    plt.show()
+

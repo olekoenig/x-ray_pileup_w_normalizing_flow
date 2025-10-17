@@ -5,7 +5,8 @@ from astropy.io import fits
 from torch.utils.data import Dataset, Subset, random_split
 import numpy as np
 
-from config import SIXTEConfig,MLConfig
+from subs import visualize_training_dataset
+from config import SIXTEConfig, MLConfig
 
 sixte_config = SIXTEConfig()
 ml_config = MLConfig()
@@ -109,16 +110,10 @@ def main():
     # Do a few tests for trouble-shooting when running this file individually
     def test1():
         from torch.utils.data import DataLoader
-        train_dataset, val_dataset, test_dataset = load_and_split_dataset()        
-        full_train_loader = DataLoader(train_dataset, batch_size=len(train_dataset), shuffle=False)  # treat as one big batch to get min/max
-        _, targets = next(iter(full_train_loader))
-        kt_vals = targets[:, 0]
-        src_flux_vals = targets[:, 1]
-        nh_vals = targets[:, 2]
-
-        print(f"kT min: {kt_vals.min().item()}, max: {kt_vals.max().item()}")
-        print(f"src_flux min: {src_flux_vals.min().item()}, max: {src_flux_vals.max().item()} {ml_config.flux_factor:%e} cgs")
-        print(f"nh min: {nh_vals.min().item()}, max: {nh_vals.max().item()}")
+        train_dataset, val_dataset, test_dataset = load_and_split_dataset()
+        # treat as one big batch to get target values in array without batch splitup
+        full_train_loader = DataLoader(train_dataset, batch_size=len(train_dataset), shuffle=False)
+        visualize_training_dataset(full_train_loader)
 
     def test2():
         piledup = glob.glob(sixte_config.SPECDIR + "*cgs*.fits")
@@ -134,7 +129,8 @@ def main():
         idx = test_dataset.index_of_input(input_name)
         (inp, target) = test_dataset[idx]
 
-    test_filename_indexing()
+    # test_filename_indexing()
+    test1()
 
 if __name__ == "__main__":
     main()
