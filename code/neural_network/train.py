@@ -5,8 +5,6 @@ from dataclasses import dataclass,fields
 import torch
 from torch.utils.data import DataLoader
 
-# from neuralnetwork import ConvSpectraNet
-# from neuralnetwork import pileupNN_variance_estimator
 from data import load_and_split_dataset
 from config import MLConfig
 from subs import plot_loss
@@ -29,6 +27,7 @@ class TrainMetadata:
     validation_losses: list[float]
     running_train_losses: list[float]
     mean_total_grad_norms: list[float]
+    learning_rate: list[float]
 
 # FC4_PRE_ACTIVATION = None
 
@@ -181,12 +180,14 @@ def train_model(model, train_loader, val_loader, criterion, optimizer, num_epoch
         avg_train_loss = validation_loop(model, train_loader, criterion)
         train_metadata.training_losses.append(avg_train_loss)
 
+        train_metadata.learning_rate.append(ml_config.learning_rate)
+
         print(f"Epoch [{epoch + 1}/{num_epochs}], Train Loss: {avg_train_loss:.4f}, Validation Loss: {avg_val_loss:.4f}")
 
     if save:
         weight_file = ml_config.data_neural_network + "model_weights.pth"
         torch.save(model.state_dict(), weight_file)
-        print(f"Best model saved to model_weights.pth")
+        print(f"Trained model saved to model_weights.pth")
 
     write_metadata_file(train_metadata)
     plot_loss(train_metadata, label = type(criterion).__name__)
@@ -211,14 +212,14 @@ def main():
     # model = ConvSpectraNet()
     model.to(device)
 
-    model.load_state_dict(torch.load(ml_config.data_neural_network + "model_weights.pth", map_location="cpu"))
+    #model.load_state_dict(torch.load(ml_config.data_neural_network + "model_weights.pth", map_location="cpu"))
 
-    criterion = torch.nn.MSELoss()  # use for parameter estimator
+    # criterion = torch.nn.MSELoss()  # use for parameter estimator
     # criterion = torch.nn.PoissonNLLLoss(log_input=False, full=True, reduction='mean')  # use for spectral estimator
     # criterion = torch.nn.GaussianNLLLoss(eps=ml_config.epsilon, reduction='mean')  # use for parameter + variance estimator
     criterion = False  # use for ConvSpectraFlow
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4, weight_decay=0)
+    optimizer = torch.optim.Adam(model.parameters(), lr=ml_config.learning_rate, weight_decay=0)
     train_model(model, train_loader, val_loader, criterion, optimizer, num_epochs=1024, save=True)
 
 

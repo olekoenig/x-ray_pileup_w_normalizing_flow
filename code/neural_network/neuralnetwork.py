@@ -16,13 +16,17 @@ class ConvTrunk(torch.nn.Module):
         self.activation = torch.nn.Softplus()
 
     def forward(self, x):
+        ## Necessary for in_channels=1 (spatially-averaged spectrum)
+        ## (x from data loader is [batch, 1024] but has to be [batch, 1, 1024] for conv1)
+        #if x.dim() == 2:
+        #    x = x.unsqueeze(1)
+
         x = self.activation(self.conv1(x))
         x = self.pool1(x)
         x = self.activation(self.conv2(x))
         x = self.pool2(x)
         x = x.flatten(1)
         return self.activation(self.fc1(x))
-
 
 class ConvSpectraFlow(torch.nn.Module):
     def __init__(self):
@@ -40,6 +44,11 @@ class ConvSpectraFlow(torch.nn.Module):
     def forward(self, x: torch.Tensor) -> zuko.distributions.NormalizingFlow:
         c = self.trunk(x)
         return self.nsf(c)
+
+
+#################################################
+# More architectures below for testing purposes #
+#################################################
 
 class ConvSpectraNet(torch.nn.Module):
     def __init__(self, in_channels: int = 4, output_size: int = ml_config.dim_output_parameters * 2):

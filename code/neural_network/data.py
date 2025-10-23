@@ -5,22 +5,35 @@ from astropy.io import fits
 from torch.utils.data import Dataset, Subset, random_split
 import numpy as np
 
-from subs import visualize_training_dataset
+from subs import visualize_dataset
 from config import SIXTEConfig, MLConfig
 
 sixte_config = SIXTEConfig()
 ml_config = MLConfig()
 
 class PileupDataset(Dataset):
-    def __init__(self, input_files, target_files):
-        assert len(input_files) == len(target_files)
+    def __init__(self, input_files, target_files = None):
         self.input_files = input_files
-        self.target_files = target_files
+        self.target_files = target_files if target_files else [None] * len(input_files)
 
     def __len__(self):
         return len(self.input_files)
 
+    def __TEST1__getitem__(self, idx):
+        input_data = fits.getdata(self.input_files[idx])
+        input_counts = np.array(input_data["COUNTS"], dtype=np.float32)
+        input_tensor = torch.tensor(input_counts)
+
+        kt = fits.getval(self.input_files[idx], "KT", ext=1)
+        src_flux = fits.getval(self.input_files[idx], "SRC_FLUX", ext=1) / ml_config.flux_factor
+        nh = fits.getval(self.input_files[idx], "NH", ext=1)
+
+        target_tensor = torch.tensor([kt, src_flux, nh])
+
+        return input_tensor, target_tensor
+
     def __getitem__(self, idx):
+        # for using four spatially resolved spectra as input
         input_data_circle0 = fits.getdata(self.input_files[idx])
         input_data_annulus1 = fits.getdata(self.input_files[idx].replace('circle0','annulus1'))
         input_data_annulus2 = fits.getdata(self.input_files[idx].replace('circle0','annulus2'))
@@ -45,7 +58,8 @@ class PileupDataset(Dataset):
 
         return input_tensor, target_tensor
 
-    def alt__getitem__(self, idx):
+    def __TEST2__getitem__(self, idx):
+        # For regression to the unpiled spectrum
         input_data = fits.getdata(self.input_files[idx])
         target_data = fits.getdata(self.target_files[idx])
 
@@ -75,7 +89,6 @@ class SubsetWithFilenames(Subset):
     def index_of_input(self, path: str) -> int:
         return self.index_by_input[path]
 
-    
 
 def get_src_flux_from_filename(fname):
     src_flux = re.findall("[0-9]+.[0-9]+Em10", fname)[0]
@@ -87,11 +100,11 @@ def load_and_split_dataset():
     # Perform filtering on source flux
     # piledup = [fname for fname in piledup if get_src_flux_from_filename(fname) <= 1e-10]
 
-    nonpiledup = [pha.replace("piledup", "nonpiledup") for pha in piledup]
+    # nonpiledup = [pha.replace("piledup", "nonpiledup") for pha in piledup]
 
     torch.manual_seed(ml_config.dataloader_random_seed)
 
-    dataset = PileupDataset(piledup, nonpiledup)
+    dataset = PileupDataset(piledup)
 
     train_size = int(0.7 * len(dataset))
     val_size = int(0.15 * len(dataset))
@@ -102,24 +115,25 @@ def load_and_split_dataset():
     train_dataset, val_dataset, test_dataset = [
     SubsetWithFilenames(dataset, split.indices) for split in random_split(dataset,[train_size, val_size, test_size])
     ]
-    # train_dataset, val_dataset, test_dataset = random_split(dataset, [train_size, val_size, test_size])
 
     return train_dataset, val_dataset, test_dataset
 
 def main():
     # Do a few tests for trouble-shooting when running this file individually
-    def test1():
+    def test_grid():
         from torch.utils.data import DataLoader
         train_dataset, val_dataset, test_dataset = load_and_split_dataset()
         # treat as one big batch to get target values in array without batch splitup
         full_train_loader = DataLoader(train_dataset, batch_size=len(train_dataset), shuffle=False)
-        visualize_training_dataset(full_train_loader)
+        full_test_loader = DataLoader(test_dataset, batch_size=len(test_dataset), shuffle=False)
+        visualize_dataset(full_train_loader, title=f"Training dataset ({len(train_dataset)} samples)")
+        visualize_dataset(full_test_loader, title=f"Test dataset ({len(test_dataset)} samples)")
 
     def test2():
         piledup = glob.glob(sixte_config.SPECDIR + "*cgs*.fits")
         nonpiledup = [pha.replace("piledup", "nonpiledup") for pha in piledup]
         torch.manual_seed(ml_config.dataloader_random_seed)
-        dataset = PileupDataset(piledup, nonpiledup)
+        dataset = PileupDataset(piledup, target_files=nonpiledup)
         print(dataset.__getitem__(0))
 
     def test_filename_indexing():
@@ -130,7 +144,7 @@ def main():
         (inp, target) = test_dataset[idx]
 
     # test_filename_indexing()
-    test1()
+    test_grid()
 
 if __name__ == "__main__":
     main()

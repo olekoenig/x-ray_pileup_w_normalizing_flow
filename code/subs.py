@@ -145,26 +145,28 @@ def evaluate_on_test_spectrum(model, test_dataset, phafile = False, plot_input_d
     else:
         print("Wrote {}".format(*outfiles))
 
-def plot_parameter_distributions(targets):
+def plot_parameter_distributions(targets, title=""):
     fig, axes = plt.subplots(1, 3, figsize=(15, 4), sharey=True)
 
     colors = ['blue', 'green', 'red']
+    nbins = 50
 
     for ii in range(3):
         if ii == 1:
             data_min = targets[:, ii].min()
             data_max = targets[:, ii].max()
-            bins = np.logspace(np.log10(data_min), np.log10(data_max), 51)
+            bins = np.logspace(np.log10(data_min), np.log10(data_max), nbins+1)
             axes[ii].set_xscale('log')
         else:
-            bins = 50
+            bins = nbins
 
-        axes[ii].set_ylim(0, 300)
         axes[ii].hist(targets[:, ii], bins=bins, alpha=0.7, color=colors[ii], edgecolor='black')
 
         axes[ii].set_xlabel(model_config.names[ii])
 
     axes[0].set_ylabel('Number of samples')
+    fig.suptitle(title)
+    plt.subplots_adjust(wspace=0)
     return fig
 
 def print_dataset_statistics(targets):
@@ -176,13 +178,11 @@ def print_dataset_statistics(targets):
         values = targets[:, ii]
         print(f"\n{name} range: {values.min()} - {values.max()}")
 
-def visualize_training_dataset(train_dataset):
-    _, targets = next(iter(train_dataset))
+def visualize_dataset(dataset, title=""):
+    _, targets = next(iter(dataset))
     targets[:, 1] *= ml_config.flux_factor
 
     print_dataset_statistics(targets)
-    #fig1 = plot_dataset_parameter_space(targets, show_projections=True)
-    #plt.show()
-    fig2 = plot_parameter_distributions(targets)
+    fig = plot_parameter_distributions(targets, title=title)
     plt.show()
 
