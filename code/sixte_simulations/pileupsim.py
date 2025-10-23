@@ -27,6 +27,7 @@ Changelog:
               Rename 020 --> 820 as per eSASS convention (lightleak cannot be simulated)
 - 2025-01-22: Move simputfile call into new wrapper within sixtesoft,
               Add sixtesim wrapper, add makespec commands and impact list creation
+- 2025-10-20: Add logegrid flag, set to True (important for powerlaw)
 
 ------
 To Do:
@@ -108,7 +109,11 @@ class Pileupsim:
         else:
             self.logfile = None
             self.chatter = 0
-        
+
+        self.logegrid = False
+        self.elow = 0.01  # [keV]
+        self.ehigh = 15  # [keV]
+            
         self.simputname = f"{config.SIMPUTDIR}{self.basename}.simput"
         self.evtfilelist = ["{}{}_tel{}_{}".format(config.EVTDIR, self.basename,
                                 tm, self.evtfile_suffix) for tm in config.ACTIVE_TMS]
@@ -235,10 +240,11 @@ class Pileupsim:
         """
         sixtesoft.simputfile(self.simputname, src_name = self.basename, srcflux = self.flux,
                              isisprep = self.isisprep, isisfile = self.parfile,
-                             elow = 0, eup = 15,
+                             elow = self.elow, eup = self.ehigh, logegrid = self.logegrid,
                              emin = config.EMIN, emax = config.EMAX,
                              ra = config.RA, dec = config.DEC,
-                             mjdref = config.MJDREF, chatter = self.chatter)
+                             mjdref = config.MJDREF, chatter = self.chatter,
+                             logfile=self.logfile)
         if self.verbose > 0:
             print(f"Wrote simput {self.simputname}")
 
@@ -433,6 +439,11 @@ clobber=yes"""
         self.merge_eventfiles()
         self.sixte_radec2xy()
 
+        sixtesoft.makespec(evtfile=self.merged_evtfile, spectrum=self.finalSpectrumName,
+                           rsppath=config.XMLDIR, logfile=self.logfile)
+        self.add_spec_param_keywords(self.finalSpectrumName)
+        self._add_keywords(self.finalSpectrumName)
+        
         if config.ANNULI_REGFILES:
             for regfile in config.ANNULI_REGFILES:
                 pha_name = "{}_{}.fits".format(os.path.splitext(self.finalSpectrumName)[0],
@@ -441,11 +452,6 @@ clobber=yes"""
                                    rsppath=config.XMLDIR, logfile=self.logfile, regfile=config.PILEUPSIM_DIR+regfile)
                 self.add_spec_param_keywords(pha_name)
                 self._add_keywords(pha_name)
-        else:
-            sixtesoft.makespec(evtfile=self.merged_evtfile, spectrum=self.finalSpectrumName,
-                               rsppath=config.XMLDIR, logfile=self.logfile)
-            self.add_spec_param_keywords(self.finalSpectrumName)
-            self._add_keywords(self.finalSpectrumName)
 
 
     def add_spec_param_keywords(self, fp):

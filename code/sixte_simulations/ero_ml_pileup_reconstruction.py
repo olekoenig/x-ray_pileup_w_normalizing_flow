@@ -31,15 +31,26 @@ def write_bbody_parfile(nh, ktbb):
         fp.write("  3  bbody(1).kT          0     0         {:f}        0.01         100  keV\n".format(ktbb/1000))
     return parfile
 
-def generate_latin_hypercube(n_points, flux_min, flux_max, kt_min,
-                             kt_max, nh_min, nh_max):
+def write_plaw_parfile(nh, gamma):
+    parfile = "{}{:f}e22_{:f}PhoIndex.par".format(sixte_config.ISISPARFILEDIR, nh, gamma)
+    with open(parfile, 'w') as fp:
+        fp.write("tbnew_simple(1)*powerlaw(1)\n")
+        fp.write(" idx  param           tie-to  freeze         value         min         max\n")
+        fp.write("  1  tbnew_simple(1).nH   0     0         {:f}           0         100  10^22/cm^2\n".format(nh))
+        fp.write("  2  powerlaw(1).norm     0     0                1           0       1e+10 \n")
+        fp.write("  3  powerlaw(1).PhoIndex 0     0         {:f}          -2           9\n".format(gamma))
+    return parfile
+
+def generate_latin_hypercube(n_points, flux_min, flux_max, par1_min,
+                             par1_max, par2_min, par2_max):
     rng = np.random.default_rng(ml_config.dataloader_random_seed)
     sampler = qmc.LatinHypercube(d = 3, rng=rng)
     sample = sampler.random(n = n_points)
-    l_bounds = [np.log(flux_min), kt_min, nh_min]
-    u_bounds = [np.log(flux_max), kt_max, nh_max]
+    l_bounds = [np.log(flux_min), par1_min, par2_min]
+    u_bounds = [np.log(flux_max), par1_max, par2_max]
     sample_scaled = qmc.scale(sample, l_bounds, u_bounds)
-    sample_scaled[:,0] = np.exp(sample_scaled[:,0])
+    sample_scaled[:, 0] = np.exp(sample_scaled[:, 0])
+    #sample_scaled[:, 2] = np.exp(sample_scaled[:, 2])
     return sample_scaled
 
 def write_parfiles(samples):
@@ -55,9 +66,10 @@ def write_parfiles(samples):
         flux = sample[0]
         if flux not in used_fluxes:
             used_fluxes.append(flux)
-            kt = sample[1]
-            nh = sample[2]
-            parfile = write_bbody_parfile(nh, kt)
+            par2 = sample[1]
+            par1 = sample[2]
+            parfile = write_plaw_parfile(par1, par2)
+            #parfile = write_bbody_parfile(par1, par2)
             parfiles.append(parfile)
         else:
             pass
@@ -67,12 +79,14 @@ def main():
     # Define the fluxes you want to simulate, in erg/cm^2/s and in
     # energyband given by EMIN, EMAX in config.py
     flux_min, flux_max = 1e-12, 1e-8  # [cgs]
-    kt_min, kt_max = 30, 200  # [eV]
-    nh_min, nh_max = 0.2, 2  # [10^22 cm^-2]
+    #flux_min, flux_max = 1e-12, 1e-10  # [cgs]
+    # par1_min, par1_max = 30, 200  # [eV]
+    par1_min, par1_max = 1.3, 4  # [PhoIndex]
+    par2_min, par2_max = 0.2, 2  # [10^22 cm^-2]
 
     n_points = 20000
     samples = generate_latin_hypercube(n_points, flux_min, flux_max,
-                                       kt_min, kt_max, nh_min, nh_max)
+                                       par1_min, par1_max, par2_min, par2_max)
     parfiles = write_parfiles(samples)
 
     cmds = []
