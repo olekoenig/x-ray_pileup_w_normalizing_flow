@@ -3,21 +3,18 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class MLConfig:
-    data_neural_network: str = "/d1/burg1/astroai/pileup/data_neural_network/"
+    data_neural_network: str = "/pool/burg1/astroai/pileup/data_neural_network/"
 
     # Hyperparameters of neural network and related parameters
     dataloader_random_seed: int = 42
     dim_input_parameters: int = 1024  # channels in spectrum
     dim_output_parameters: int = 3
-    epsilon: float = 1e-6  # for clamped values
     batch_size: int = 512
     learning_rate: float = 0.001
 
-    flux_factor: float = 1e-8  # factor to multiply the target flux values with
-
 @dataclass(frozen=True)
 class ModelConfig:
-    names = [r"$kT$ [keV]", r"Flux [$\mathrm{erg}\,\mathrm{cm}^{-2}\,\mathrm{s}^{-1}$]", r"$N_\mathrm{H}$ [$10^{22}\,\mathrm{cm}^{-2}$]"]
+    names = [r"$kT$ [keV]", r"Flux [$\mathrm{erg}\,\mathrm{s}^{-1}\,\mathrm{cm}^{-2}$]", r"$N_\mathrm{H}$ [$10^{22}\,\mathrm{cm}^{-2}$]"]
 
 @dataclass(frozen=True)
 class SIXTEConfig():
@@ -66,13 +63,13 @@ class SIXTEConfig():
     GLOBAL_PFILES_DIR = os.getenv("HOME") + "/pfiles"
 
     # Folders of the data products on global disk (these products are not deleted)
-    DATADIR = "/d1/burg1/astroai/pileup/sims_plaw/"
+    DATADIR = "/pool/burg1/astroai/pileup/sims/"
     LCDIR = DATADIR + "lc/"
     IMGDIR = DATADIR + "img/"
     LOGDIR = DATADIR + "log/"
     SPECDIR = DATADIR + "spec_piledup/"
     TARGET_SPECDIR = DATADIR + "spec_nonpiledup/"
-    ISISPARFILEDIR = DATADIR + "pars_plaw/"
+    ISISPARFILEDIR = DATADIR + "pars/"
 
     # If we always simulate the same slew, we don't need to always compute the
     # GTI file (ero_vis) and write RMF/ARF (srctool) but can calculate it

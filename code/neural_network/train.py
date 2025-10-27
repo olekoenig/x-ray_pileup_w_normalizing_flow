@@ -4,6 +4,7 @@ from dataclasses import dataclass,fields
 
 import torch
 from torch.utils.data import DataLoader
+import joblib
 
 from data import load_and_split_dataset
 from config import MLConfig
@@ -30,7 +31,6 @@ class TrainMetadata:
     learning_rate: list[float]
 
 # FC4_PRE_ACTIVATION = None
-
 # def _capture_fc4_pre_activation(module, input, output):
 #     """Define a hook function to capture the output of fc4 before the activation is applied."""
 #     global FC4_PRE_ACTIVATION
@@ -48,27 +48,28 @@ def _get_grad_norm(model: torch.nn.Module) -> float:
     total_norm = total_norm**0.5
     return total_norm
 
-def _get_mu_var_from_model(outputs):
-    """Split parameter means (first numbers) and log variance (last half of numbers).
-    It does not quite correspond to the variance because I'm applying softplus
-    instead of exp on the logarithm of the variance for numerical stability."""
-    mu, raw_log_var = outputs[:, :ml_config.dim_output_parameters], outputs[:, ml_config.dim_output_parameters:]
-    floor = -10
-    raw_log_var = raw_log_var.clamp(floor, 6)  # Clamp such that variance doesn't explode to zero/infinity
-    var = torch.nn.functional.softplus(raw_log_var)
-    if var.min() < np.exp(floor+1):
-        print(f"WARNING: Log variance seems to hit the clamped floor")
-    return mu, var
+#def _get_mu_var_from_model(outputs):
+#    """Split parameter means (first numbers) and log variance (last half of numbers).
+#    It does not quite correspond to the variance because I'm applying softplus
+#    instead of exp on the logarithm of the variance for numerical stability."""
+#    mu, raw_log_var = outputs[:, :ml_config.dim_output_parameters], outputs[:, ml_config.dim_output_parameters:]
+#    floor = -10
+#    raw_log_var = raw_log_var.clamp(floor, 6)  # Clamp such that variance doesn't explode to zero/infinity
+#    var = torch.nn.functional.softplus(raw_log_var)
+#    if var.min() < np.exp(floor+1):
+#        print(f"WARNING: Log variance seems to hit the clamped floor")
+#    return mu, var
 
-def _transform_targets(targets: torch.Tensor) -> torch.Tensor:
-    """
-    Prediction of log‑values to avoid negative values + capture large value range
-    """
-    mu0 = torch.log(targets[:, 0].clamp_min(ml_config.epsilon))
-    mu1 = torch.log(targets[:, 1].clamp_min(ml_config.epsilon))
-    mu2 = torch.log(targets[:, 2].clamp_min(ml_config.epsilon))
-    log_targets = torch.stack([mu0, mu1, mu2], dim=1)
-    return log_targets
+#def _transform_targets(targets: torch.Tensor) -> torch.Tensor:
+#    """
+#    Prediction of log‑values to avoid negative values + capture large value range
+#    """
+#    epsilon = 1e-6
+#    mu0 = torch.log(targets[:, 0].clamp_min(epsilon))
+#    mu1 = torch.log(targets[:, 1].clamp_min(epsilon))
+#    mu2 = torch.log(targets[:, 2].clamp_min(epsilon))
+#    log_targets = torch.stack([mu0, mu1, mu2], dim=1)
+#    return log_targets
 
 def training_loop(model, train_loader, criterion, optimizer):
     model.train()  # Set the model to training mode
@@ -89,11 +90,11 @@ def training_loop(model, train_loader, criterion, optimizer):
         # loss = criterion(outputs, log_targets)
 
         # mu, var = _get_mu_var_from_model(outputs)
-        log_targets = _transform_targets(targets)
+        # log_targets = _transform_targets(targets)
         # loss = criterion(mu, log_targets, var)  # use for GaussianNLLLoss
         # loss = criterion(outputs, targets)
 
-        loss = model.nll(inputs, log_targets)
+        loss = model.nll(inputs, targets)
 
         # Add custom regularization on last layer's pre-activation outputs
         # (to penalize negative values at high energies):
@@ -146,10 +147,10 @@ def validation_loop(model, val_loader, criterion):
             # loss = criterion(outputs, targets)  # use for MSELoss / PoissonNLLLoss
 
             # mu, var = _get_mu_var_from_model(outputs)
-            log_targets = _transform_targets(targets)
+            #log_targets = _transform_targets(targets)
             # loss = criterion(mu, log_targets, var)  # use for GaussianNLLLoss
 
-            loss = model.nll(inputs, log_targets)  # use for ConvSpectraFlow
+            loss = model.nll(inputs, targets)  # use for ConvSpectraFlow
 
             # ################################################
             # Manual calculation of loss
@@ -167,15 +168,17 @@ def validation_loop(model, val_loader, criterion):
 
     return avg_val_loss
 
-def train_model(model, train_loader, val_loader, criterion, optimizer, num_epochs=8, save=True):
+def train_model(model, train_loader, val_loader, criterion, optimizer, num_epochs=8):
     train_metadata = TrainMetadata(*[list() for dummy in fields(TrainMetadata)])
 
     for epoch in range(num_epochs):
         epoch_metadata = training_loop(model, train_loader, criterion, optimizer)
+
         train_metadata.running_train_losses.append(epoch_metadata.running_train_loss)
         train_metadata.mean_total_grad_norms.append(epoch_metadata.mean_total_grad_norm)
 
         avg_val_loss = validation_loop(model, val_loader, criterion)
+
         train_metadata.validation_losses.append(avg_val_loss)
         avg_train_loss = validation_loop(model, train_loader, criterion)
         train_metadata.training_losses.append(avg_train_loss)
@@ -184,13 +187,7 @@ def train_model(model, train_loader, val_loader, criterion, optimizer, num_epoch
 
         print(f"Epoch [{epoch + 1}/{num_epochs}], Train Loss: {avg_train_loss:.4f}, Validation Loss: {avg_val_loss:.4f}")
 
-    if save:
-        weight_file = ml_config.data_neural_network + "model_weights.pth"
-        torch.save(model.state_dict(), weight_file)
-        print(f"Trained model saved to model_weights.pth")
-
-    write_metadata_file(train_metadata)
-    plot_loss(train_metadata, label = type(criterion).__name__)
+    return train_metadata
 
 def write_metadata_file(metadata, csv_filename = "loss.csv"):
     with open(csv_filename, mode="w", newline="") as file:
@@ -209,18 +206,26 @@ def main():
     val_loader = DataLoader(val_dataset, batch_size=ml_config.batch_size, shuffle=False, num_workers=32)
 
     model = ConvSpectraFlow()
-    # model = ConvSpectraNet()
     model.to(device)
 
     #model.load_state_dict(torch.load(ml_config.data_neural_network + "model_weights.pth", map_location="cpu"))
 
     # criterion = torch.nn.MSELoss()  # use for parameter estimator
     # criterion = torch.nn.PoissonNLLLoss(log_input=False, full=True, reduction='mean')  # use for spectral estimator
-    # criterion = torch.nn.GaussianNLLLoss(eps=ml_config.epsilon, reduction='mean')  # use for parameter + variance estimator
+    # criterion = torch.nn.GaussianNLLLoss(eps=1e-6, reduction='mean')  # use for parameter + variance estimator
     criterion = False  # use for ConvSpectraFlow
 
     optimizer = torch.optim.Adam(model.parameters(), lr=ml_config.learning_rate, weight_decay=0)
-    train_model(model, train_loader, val_loader, criterion, optimizer, num_epochs=1024, save=True)
+    metadata = train_model(model, train_loader, val_loader, criterion, optimizer, num_epochs=2048)
+
+    joblib.dump(train_dataset.scaler, ml_config.data_neural_network + "target_scaler.pkl")
+
+    model_file = ml_config.data_neural_network + "model_weights.pth"
+    torch.save(model.state_dict(), model_file)
+    print(f"Trained model saved to {model_file}")
+
+    write_metadata_file(metadata)
+    plot_loss(metadata, label = type(criterion).__name__)
 
 
 

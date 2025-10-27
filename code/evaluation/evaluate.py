@@ -1,16 +1,11 @@
-import matplotlib.pyplot as plt
 import corner
-import torch
-from astropy.io import fits
-import numpy as np
 import pandas as pd
 import random
 from typing import Tuple
+import joblib
 
 from data import load_and_split_dataset
-# from neuralnetwork import ConvSpectraNet
-from normalizing_flow import ConvSpectraFlow
-from config import MLConfig, SIXTEConfig
+from neuralnetwork import ConvSpectraFlow
 from subs import *
 
 ml_config = MLConfig()
@@ -141,9 +136,9 @@ def evaluate_parameter_prediction(model, test_dataset):
     plt.tight_layout()
     plt.savefig("testdata.pdf")
 
-def plot_2d_posteriors(model, dataset, num_samples=10000, device='cpu'):
+def plot_2d_posteriors(model, dataset, scaler = None, num_samples=10000, device='cpu'):
     model.eval()
-    indices = [int(random.uniform(0, len(dataset) - 1)) for _ in range(50)]
+    indices = [int(random.uniform(0, len(dataset) - 1)) for _ in range(20)]
     outfiles = []
     names = [LABEL_DICT["kt"], LABEL_DICT["src_flux"], LABEL_DICT["nh"]]
 
@@ -151,22 +146,26 @@ def plot_2d_posteriors(model, dataset, num_samples=10000, device='cpu'):
         x, y_true = dataset[idx]
         x = x.unsqueeze(0).to(device)  # add batch‐dim
 
-        input_fname, target_fname = dataset.get_filenames(idx)
+        #input_fname, target_fname = dataset.get_filenames(idx)
 
         with torch.no_grad():
             q_dist = model(x)
             samples = q_dist.sample((num_samples,))
 
         samples = samples.squeeze(1).cpu().numpy()  # remove batch dimension
-        samples = np.exp(samples)  # re-transform target from log space to actual values
 
-        samples[:, 1] *= ml_config.flux_factor
-        y_true[1] *= ml_config.flux_factor
+        if scaler:
+            samples = scaler.inverse_transform(samples)
+            y_true = scaler.inverse_transform(y_true.reshape(1, -1)).flatten()
+
+            # Convert log(flux) back to linear flux
+            samples[:, 1] = 10**samples[:, 1]
+            y_true[1] = 10**y_true[1]
 
         figure = corner.corner(samples, labels=names, smooth=1,
                                show_titles=False, title_kwargs={"fontsize": 12},
                                bins=100, truths=y_true, range=[0.999, 0.999, 0.999])
-        figure.suptitle(os.path.basename(input_fname))
+        #figure.suptitle(os.path.basename(input_fname))
 
         outfile = f"outfiles/testdata_{idx}.pdf"
         outfiles.append(outfile)
@@ -180,15 +179,15 @@ def main():
     def plot_testdata():
         train_dataset, val_dataset, test_dataset = load_and_split_dataset()
 
-        # model = ConvSpectraNet()
         model = ConvSpectraFlow()
         model.load_state_dict(torch.load(ml_config.data_neural_network + "model_weights.pth", map_location="cpu"))
+        scaler = joblib.load(ml_config.data_neural_network + "target_scaler.pkl")
 
         # evaluate_on_test_spectrum(model, test_dataset, plot_input_data_only=True)
         # evaluate_on_real_spectrum(model, "/pool/burg1/novae4ole/V1710Sco_em04_PATall_820_SourceSpec_00001.fits", out_pha_file = "test.fits")
         # evaluate_on_real_spectrum(model, "/pool/burg1/tmp/YZRet_Nova_Fireball_020_SourceSpec_00001.fits")
         # evaluate_parameter_prediction(model, test_dataset)
-        plot_2d_posteriors(model, test_dataset)
+        plot_2d_posteriors(model, test_dataset, scaler = scaler)
 
     def plot_loss_from_csv():
         metadata = pd.read_csv("../neural_network/loss.csv")

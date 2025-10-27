@@ -16,8 +16,8 @@ class ConvTrunk(torch.nn.Module):
         self.activation = torch.nn.Softplus()
 
     def forward(self, x):
-        ## Necessary for in_channels=1 (spatially-averaged spectrum)
-        ## (x from data loader is [batch, 1024] but has to be [batch, 1, 1024] for conv1)
+        ## Necessary for in_channels=1 (spatially-averaged spectrum):
+        ## x from data loader is [batch, 1024] but has to be [batch, 1, 1024] for conv1
         #if x.dim() == 2:
         #    x = x.unsqueeze(1)
 
@@ -34,7 +34,6 @@ class ConvSpectraFlow(torch.nn.Module):
         self.trunk = ConvTrunk()
         self.nsf = zuko.flows.NSF(features=ml_config.dim_output_parameters,
                                   context=128, transforms=3, hidden_features=(256,))
-
     def nll(self, x, y):
         context = self.trunk(x)
         q_dist = self.nsf(context)

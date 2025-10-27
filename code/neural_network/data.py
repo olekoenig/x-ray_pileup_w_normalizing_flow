@@ -4,40 +4,32 @@ import torch
 from astropy.io import fits
 from torch.utils.data import Dataset, Subset, random_split
 import numpy as np
+from sklearn.preprocessing import StandardScaler
 
-from subs import visualize_dataset
+from subs import print_dataset_statistics, plot_parameter_distributions
 from config import SIXTEConfig, MLConfig
 
 sixte_config = SIXTEConfig()
 ml_config = MLConfig()
 
 class PileupDataset(Dataset):
-    def __init__(self, input_files, target_files = None):
+    def __init__(self, input_files, target_files = None, scaler = None, fit_scaler = None):
         self.input_files = input_files
         self.target_files = target_files if target_files else [None] * len(input_files)
+        self.scaler = scaler
+
+        if fit_scaler:
+            self.fit_scaler()
 
     def __len__(self):
         return len(self.input_files)
 
-    def __TEST1__getitem__(self, idx):
-        input_data = fits.getdata(self.input_files[idx])
-        input_counts = np.array(input_data["COUNTS"], dtype=np.float32)
-        input_tensor = torch.tensor(input_counts)
-
-        kt = fits.getval(self.input_files[idx], "KT", ext=1)
-        src_flux = fits.getval(self.input_files[idx], "SRC_FLUX", ext=1) / ml_config.flux_factor
-        nh = fits.getval(self.input_files[idx], "NH", ext=1)
-
-        target_tensor = torch.tensor([kt, src_flux, nh])
-
-        return input_tensor, target_tensor
-
     def __getitem__(self, idx):
         # for using four spatially resolved spectra as input
         input_data_circle0 = fits.getdata(self.input_files[idx])
-        input_data_annulus1 = fits.getdata(self.input_files[idx].replace('circle0','annulus1'))
-        input_data_annulus2 = fits.getdata(self.input_files[idx].replace('circle0','annulus2'))
-        input_data_annulus3 = fits.getdata(self.input_files[idx].replace('circle0','annulus3'))
+        input_data_annulus1 = fits.getdata(self.input_files[idx].replace('circle0', 'annulus1'))
+        input_data_annulus2 = fits.getdata(self.input_files[idx].replace('circle0', 'annulus2'))
+        input_data_annulus3 = fits.getdata(self.input_files[idx].replace('circle0', 'annulus3'))
 
         input_counts_circle0 = np.array(input_data_circle0["COUNTS"], dtype=np.float32)
         input_counts_annulus1 = np.array(input_data_annulus1["COUNTS"], dtype=np.float32)
@@ -50,9 +42,23 @@ class PileupDataset(Dataset):
 
         input_tensor = torch.stack(counts, dim=0)
 
-        kt = fits.getval(self.input_files[idx], "KT", ext=1)
-        src_flux = fits.getval(self.input_files[idx], "SRC_FLUX", ext=1) / ml_config.flux_factor
-        nh = fits.getval(self.input_files[idx], "NH", ext=1)
+        (kt, src_flux, nh) = self._get_targets_from_fits_file(self.input_files[idx])
+        target_tensor = torch.tensor([kt, src_flux, nh])
+
+        if self.scaler:
+            # Need to reshape from (3,), so from 1D array, to (1, 3) because transform expects 2D array.
+            # flatten transforms back to (3,).
+            target_normalized = self.scaler.transform(target_tensor.reshape(1, -1)).flatten()
+            target_tensor = torch.from_numpy(target_normalized).float()
+
+        return input_tensor, target_tensor
+
+    def __TEST1__getitem__(self, idx):
+        input_data = fits.getdata(self.input_files[idx])
+        input_counts = np.array(input_data["COUNTS"], dtype=np.float32)
+        input_tensor = torch.tensor(input_counts)
+
+        (kt, src_flux, nh) = self._get_targets_from_fits_file(self.input_files[idx])
 
         target_tensor = torch.tensor([kt, src_flux, nh])
 
@@ -73,6 +79,25 @@ class PileupDataset(Dataset):
 
     def get_filenames(self, idx):
         return self.input_files[idx], self.target_files[idx]
+
+    def _get_targets_from_fits_file(self, filename):
+        src_flux = fits.getval(filename, "SRC_FLUX", ext=1)
+
+        # Transform of log grid to linear range, otherwise standardization biased towards high fluxes
+        src_flux = np.log10(src_flux)
+
+        kt = fits.getval(filename, "KT", ext=1)
+        nh = fits.getval(filename, "NH", ext=1)
+
+        return kt, src_flux, nh
+
+    def fit_scaler(self):
+        all_targets = []
+        for filename in self.input_files:
+            (kt, src_flux, nh) = self._get_targets_from_fits_file(filename)
+            all_targets.append(np.array([kt, src_flux, nh]))
+
+        self.scaler = StandardScaler().fit(np.array(all_targets))
 
 
 class SubsetWithFilenames(Subset):
@@ -97,37 +122,26 @@ def get_src_flux_from_filename(fname):
 def load_and_split_dataset():
     piledup = glob.glob(sixte_config.SPECDIR + "*cgs*piledup_circle0.fits")
 
-    # Perform filtering on source flux
-    # piledup = [fname for fname in piledup if get_src_flux_from_filename(fname) <= 1e-10]
-
-    # nonpiledup = [pha.replace("piledup", "nonpiledup") for pha in piledup]
-
     torch.manual_seed(ml_config.dataloader_random_seed)
 
-    dataset = PileupDataset(piledup)
+    train_size = int(0.7 * len(piledup))
+    val_size = int(0.15 * len(piledup))
+    test_size = len(piledup) - train_size - val_size  # Ensure all samples are used
 
-    train_size = int(0.7 * len(dataset))
-    val_size = int(0.15 * len(dataset))
-    test_size = len(dataset) - train_size - val_size  # Ensure all samples are used
+    train_files, val_files, test_files = random_split(piledup, [train_size, val_size, test_size])
 
-    # Use class inheriting the PileupDataset in order to access the filenames
-    # (which contain the spectral parameter and flux information)
-    train_dataset, val_dataset, test_dataset = [
-    SubsetWithFilenames(dataset, split.indices) for split in random_split(dataset,[train_size, val_size, test_size])
-    ]
+    train_dataset = PileupDataset(train_files, fit_scaler = True)
+    val_dataset = PileupDataset(val_files, scaler = train_dataset.scaler)
+    test_dataset = PileupDataset(test_files, scaler = train_dataset.scaler)
 
     return train_dataset, val_dataset, test_dataset
 
 def main():
-    # Do a few tests for trouble-shooting when running this file individually
     def test_grid():
-        from torch.utils.data import DataLoader
         train_dataset, val_dataset, test_dataset = load_and_split_dataset()
-        # treat as one big batch to get target values in array without batch splitup
-        full_train_loader = DataLoader(train_dataset, batch_size=len(train_dataset), shuffle=False)
-        full_test_loader = DataLoader(test_dataset, batch_size=len(test_dataset), shuffle=False)
-        visualize_dataset(full_train_loader, title=f"Training dataset ({len(train_dataset)} samples)")
-        visualize_dataset(full_test_loader, title=f"Test dataset ({len(test_dataset)} samples)")
+        targets = torch.stack([train_dataset[ii][1] for ii in range(len(train_dataset))])
+        print_dataset_statistics(targets, title="Training")
+        plot_parameter_distributions(targets, title="Training")
 
     def test2():
         piledup = glob.glob(sixte_config.SPECDIR + "*cgs*.fits")
@@ -137,13 +151,11 @@ def main():
         print(dataset.__getitem__(0))
 
     def test_filename_indexing():
-        from torch.utils.data import DataLoader
         train_dataset, val_dataset, test_dataset = load_and_split_dataset()
         input_name = "/pool/burg1/astroai/pileup/sims/spec_piledup/1.223821Em10cgs_0.981670nH_0.139405kT_piledup_circle0.fits"
         idx = test_dataset.index_of_input(input_name)
         (inp, target) = test_dataset[idx]
 
-    # test_filename_indexing()
     test_grid()
 
 if __name__ == "__main__":

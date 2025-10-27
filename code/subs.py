@@ -24,13 +24,8 @@ def plot_loss(metadata, label = "Loss"):
     axes[0].plot(np.arange(len(metadata.training_losses))+1, metadata.training_losses, label="Training Loss", color="red")
     axes[0].plot(np.arange(len(metadata.validation_losses))+1, metadata.validation_losses, label="Validation Loss", color="blue")
 
-    # axes[0].plot(np.arange(len(metadata.term1))+1, metadata.term1+metadata.term2, label=r"Manual total loss")
-    # axes[0].plot(np.arange(len(metadata.term1))+1, metadata.term1, label=r"Term 2: $\frac{1}{2}\log(\sigma^2)$")
-    # axes[0].plot(np.arange(len(metadata.term2)) + 1, metadata.term2, label=r"Term 1: $\frac{1}{2}(\mu-\hat{\mu})^2/\sigma^2$")
     axes[0].set_ylabel(label)
     axes[0].legend()
-    # axes[0].set_yscale('log')
-    # axes[0].set_ylim(-2.7, 8)
 
     axes[-1].plot(np.arange(len(metadata.mean_total_grad_norms))+1, metadata.mean_total_grad_norms)
     axes[-1].set_yscale('log')
@@ -146,43 +141,30 @@ def evaluate_on_test_spectrum(model, test_dataset, phafile = False, plot_input_d
         print("Wrote {}".format(*outfiles))
 
 def plot_parameter_distributions(targets, title=""):
-    fig, axes = plt.subplots(1, 3, figsize=(15, 4), sharey=True)
+    fig, axes = plt.subplots(1, ml_config.dim_output_parameters, figsize=(15, 4), sharey=True)
 
     colors = ['blue', 'green', 'red']
     nbins = 50
 
-    for ii in range(3):
-        if ii == 1:
-            data_min = targets[:, ii].min()
-            data_max = targets[:, ii].max()
-            bins = np.logspace(np.log10(data_min), np.log10(data_max), nbins+1)
-            axes[ii].set_xscale('log')
-        else:
-            bins = nbins
-
-        axes[ii].hist(targets[:, ii], bins=bins, alpha=0.7, color=colors[ii], edgecolor='black')
-
+    for ii in range(ml_config.dim_output_parameters):
+        axes[ii].hist(targets[:, ii], bins=nbins, alpha=0.7, color=colors[ii], edgecolor='black')
         axes[ii].set_xlabel(model_config.names[ii])
 
     axes[0].set_ylabel('Number of samples')
-    fig.suptitle(title)
+    fig.suptitle(f"{title} dataset ({len(targets)} samples)")
     plt.subplots_adjust(wspace=0)
-    return fig
+    plt.tight_layout()
+    plt.savefig(f"{title}_dataset.pdf")
+    print("Wrote {}_dataset.pdf".format(title))
 
-def print_dataset_statistics(targets):
-    print(f"\nParameter Statistics:")
+def print_dataset_statistics(targets, title="Dataset"):
+    print(f"\n{title} statistics:")
     print("=" * 50)
     print(f"Number of samples: {len(targets)}")
 
     for ii, name in enumerate(model_config.names):
         values = targets[:, ii]
-        print(f"\n{name} range: {values.min()} - {values.max()}")
-
-def visualize_dataset(dataset, title=""):
-    _, targets = next(iter(dataset))
-    targets[:, 1] *= ml_config.flux_factor
-
-    print_dataset_statistics(targets)
-    fig = plot_parameter_distributions(targets, title=title)
-    plt.show()
-
+        print(f"\n{name}")
+        print(f"\tRange: {values.min()} - {values.max()}")
+        print(f"\tMean: {values.mean()}, Stddev: {values.std()}")
+        print(f"\tMedian: {values.median()}")
