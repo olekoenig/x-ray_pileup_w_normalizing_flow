@@ -12,7 +12,7 @@ from subs import plot_loss
 
 from neuralnetwork import ConvSpectraFlow
 
-device = 'cpu'
+device = 'cpu'  # torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 ml_config = MLConfig()
 
 @dataclass
@@ -30,6 +30,13 @@ class TrainMetadata:
     mean_total_grad_norms: list[float]
     learning_rate: list[float]
 
+# FC4_PRE_ACTIVATION = None
+# def _capture_fc4_pre_activation(module, input, output):
+#     """Define a hook function to capture the output of fc4 before the activation is applied."""
+#     global FC4_PRE_ACTIVATION
+#     # Capture a clone of the output to avoid any in-place issues.
+#     FC4_PRE_ACTIVATION = output.detach().clone()
+
 def _get_grad_norm(model: torch.nn.Module) -> float:
     grad_norms = []
     total_norm = 0
@@ -41,17 +48,61 @@ def _get_grad_norm(model: torch.nn.Module) -> float:
     total_norm = total_norm**0.5
     return total_norm
 
+#def _get_mu_var_from_model(outputs):
+#    """Split parameter means (first numbers) and log variance (last half of numbers).
+#    It does not quite correspond to the variance because I'm applying softplus
+#    instead of exp on the logarithm of the variance for numerical stability."""
+#    mu, raw_log_var = outputs[:, :ml_config.dim_output_parameters], outputs[:, ml_config.dim_output_parameters:]
+#    floor = -10
+#    raw_log_var = raw_log_var.clamp(floor, 6)  # Clamp such that variance doesn't explode to zero/infinity
+#    var = torch.nn.functional.softplus(raw_log_var)
+#    if var.min() < np.exp(floor+1):
+#        print(f"WARNING: Log variance seems to hit the clamped floor")
+#    return mu, var
+
+#def _transform_targets(targets: torch.Tensor) -> torch.Tensor:
+#    """
+#    Prediction of log‑values to avoid negative values + capture large value range
+#    """
+#    epsilon = 1e-6
+#    mu0 = torch.log(targets[:, 0].clamp_min(epsilon))
+#    mu1 = torch.log(targets[:, 1].clamp_min(epsilon))
+#    mu2 = torch.log(targets[:, 2].clamp_min(epsilon))
+#    log_targets = torch.stack([mu0, mu1, mu2], dim=1)
+#    return log_targets
+
 def training_loop(model, train_loader, criterion, optimizer):
     model.train()  # Set the model to training mode
     running_train_loss = 0.0
     batch_losses = []
     total_grad_norms = []
 
+    #hook_fc4 = model.fc4.register_forward_hook(_capture_fc4_pre_activation)
+    #lambda_reg = 1e-10  # regularization coefficient to penalize negative pre-activations.
+
     for batch_idx, (inputs, targets) in enumerate(train_loader):
         # Move data to the correct device (GPU/CPU)
         inputs, targets = inputs.to(device), targets.to(device)
 
+        # Forward pass
+        # outputs = model(inputs)
+
+        # loss = criterion(outputs, log_targets)
+
+        # mu, var = _get_mu_var_from_model(outputs)
+        # log_targets = _transform_targets(targets)
+        # loss = criterion(mu, log_targets, var)  # use for GaussianNLLLoss
+        # loss = criterion(outputs, targets)
+
         loss = model.nll(inputs, targets)
+
+        # Add custom regularization on last layer's pre-activation outputs
+        # (to penalize negative values at high energies):
+        #if FC4_PRE_ACTIVATION is not None:
+        #    # We want to penalize any negative values: clamp the negative part and square it.
+        #    reg_term = lambda_reg * torch.sum(torch.clamp(-1 * FC4_PRE_ACTIVATION, min=0) ** 2)
+        #    print(loss.item(), reg_term.item())
+        #    loss = loss + reg_term
 
         # Backward pass and optimization
         optimizer.zero_grad()  # Zero the gradients
@@ -65,10 +116,14 @@ def training_loop(model, train_loader, criterion, optimizer):
         total_norm = _get_grad_norm(model)
         total_grad_norms.append(total_norm)
 
+        # torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
+
         optimizer.step()
 
         batch_losses.append(loss.item())  # Store batch-wise loss
         running_train_loss += loss.item() * inputs.size(0)
+
+    #hook_fc4.remove()
 
     running_train_loss = running_train_loss / len(train_loader.dataset)
     mean_total_grad_norm = np.mean(total_grad_norms)
@@ -89,7 +144,23 @@ def validation_loop(model, val_loader, criterion):
             inputs, targets = inputs.to(device), targets.to(device)
             outputs = model(inputs)
 
-            loss = model.nll(inputs, targets)
+            # loss = criterion(outputs, targets)  # use for MSELoss / PoissonNLLLoss
+
+            # mu, var = _get_mu_var_from_model(outputs)
+            #log_targets = _transform_targets(targets)
+            # loss = criterion(mu, log_targets, var)  # use for GaussianNLLLoss
+
+            loss = model.nll(inputs, targets)  # use for ConvSpectraFlow
+
+            # ################################################
+            # Manual calculation of loss
+            # term1 = 0.5 * torch.log(var)
+            # term2 = 0.5 * ((mu - log_targets) ** 2 / var)
+            # mean_term1 = term1.mean().detach()
+            # mean_term2 = term2.mean().detach()
+            # term1s += mean_term1.item() * inputs.size(0)
+            # term2s += mean_term2.item() * inputs.size(0)
+            # ################################################
 
             running_val_loss += loss.item() * inputs.size(0)  # Scale by batch size
 
@@ -139,6 +210,9 @@ def main():
 
     #model.load_state_dict(torch.load(ml_config.data_neural_network + "model_weights.pth", map_location="cpu"))
 
+    # criterion = torch.nn.MSELoss()  # use for parameter estimator
+    # criterion = torch.nn.PoissonNLLLoss(log_input=False, full=True, reduction='mean')  # use for spectral estimator
+    # criterion = torch.nn.GaussianNLLLoss(eps=1e-6, reduction='mean')  # use for parameter + variance estimator
     criterion = False  # use for ConvSpectraFlow
 
     optimizer = torch.optim.Adam(model.parameters(), lr=ml_config.learning_rate, weight_decay=0)

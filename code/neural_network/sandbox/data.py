@@ -53,6 +53,30 @@ class PileupDataset(Dataset):
 
         return input_tensor, target_tensor
 
+    def __TEST1__getitem__(self, idx):
+        input_data = fits.getdata(self.input_files[idx])
+        input_counts = np.array(input_data["COUNTS"], dtype=np.float32)
+        input_tensor = torch.tensor(input_counts)
+
+        (kt, src_flux, nh) = self._get_targets_from_fits_file(self.input_files[idx])
+
+        target_tensor = torch.tensor([kt, src_flux, nh])
+
+        return input_tensor, target_tensor
+
+    def __TEST2__getitem__(self, idx):
+        # For regression to the unpiled spectrum
+        input_data = fits.getdata(self.input_files[idx])
+        target_data = fits.getdata(self.target_files[idx])
+
+        input_counts = np.array(input_data["COUNTS"], dtype=np.float32)
+        target_counts = np.array(target_data["COUNTS"], dtype=np.float32)
+
+        input_tensor = torch.tensor(input_counts)
+        target_tensor = torch.tensor(target_counts)
+
+        return input_tensor, target_tensor
+
     def get_filenames(self, idx):
         return self.input_files[idx], self.target_files[idx]
 
