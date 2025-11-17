@@ -180,14 +180,14 @@ def main():
         train_dataset, val_dataset, test_dataset = load_and_split_dataset()
 
         model = ConvSpectraFlow()
-        model.load_state_dict(torch.load(ml_config.data_neural_network + "model_weights.pth", map_location="cpu"))
+        model.load_state_dict(torch.load(ml_config.data_neural_network + "model_weights.pth", weights_only=True, map_location="cpu"))
         scaler = joblib.load(ml_config.data_neural_network + "target_scaler.pkl")
 
-        # evaluate_on_test_spectrum(model, test_dataset, plot_input_data_only=True)
+        evaluate_on_test_spectrum(model, test_dataset, plot_input_data_only=True)
         # evaluate_on_real_spectrum(model, "/pool/burg1/novae4ole/V1710Sco_em04_PATall_820_SourceSpec_00001.fits", out_pha_file = "test.fits")
         # evaluate_on_real_spectrum(model, "/pool/burg1/tmp/YZRet_Nova_Fireball_020_SourceSpec_00001.fits")
         # evaluate_parameter_prediction(model, test_dataset)
-        plot_2d_posteriors(model, test_dataset, scaler = scaler)
+        #plot_2d_posteriors(model, test_dataset, scaler = scaler)
 
     def plot_loss_from_csv():
         metadata = pd.read_csv("../neural_network/loss.csv")
