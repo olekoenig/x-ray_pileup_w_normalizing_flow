@@ -6,11 +6,13 @@ import torch
 from torch.utils.data import DataLoader
 import joblib
 
-from data import load_and_split_dataset
-from config import MLConfig
-from subs import plot_loss
+#from code.data import load_and_split_dataset
+from code.config import MLConfig
+#from code.subs import plot_loss
+from code.neural_network.data import load_and_split_dataset
+from code.subs import plot_loss
 
-from neuralnetwork import ConvSpectraFlow
+from code.neural_network.neuralnetwork import ConvSpectraFlow
 
 device = 'cpu'
 ml_config = MLConfig()
@@ -131,8 +133,8 @@ def main():
     train_dataset, val_dataset, test_dataset = load_and_split_dataset()
     print(f"Number of training samples: {len(train_dataset)}")
 
-    train_loader = DataLoader(train_dataset, batch_size=ml_config.batch_size, shuffle=True, num_workers=32)
-    val_loader = DataLoader(val_dataset, batch_size=ml_config.batch_size, shuffle=False, num_workers=32)
+    train_loader = DataLoader(train_dataset, batch_size=ml_config.batch_size, shuffle=True, num_workers=ml_config.num_workers)
+    val_loader = DataLoader(val_dataset, batch_size=ml_config.batch_size, shuffle=False, num_workers=ml_config.num_workers)
 
     model = ConvSpectraFlow()
     model.to(device)
@@ -142,7 +144,7 @@ def main():
     criterion = False  # use for ConvSpectraFlow
 
     optimizer = torch.optim.Adam(model.parameters(), lr=ml_config.learning_rate, weight_decay=0)
-    metadata = train_model(model, train_loader, val_loader, criterion, optimizer, num_epochs=2048)
+    metadata = train_model(model, train_loader, val_loader, criterion, optimizer, num_epochs=ml_config.num_epochs)
 
     joblib.dump(train_dataset.scaler, ml_config.data_neural_network + "target_scaler.pkl")
 
