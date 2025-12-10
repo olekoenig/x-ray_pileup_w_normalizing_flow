@@ -3,7 +3,7 @@ import pandas as pd
 import random
 from typing import Tuple
 import joblib
-
+    
 from data import load_and_split_dataset
 from neuralnetwork import ConvSpectraFlow
 from subs import *
@@ -167,7 +167,7 @@ def plot_2d_posteriors(model, dataset, scaler = None, num_samples=10000, device=
                                bins=100, truths=y_true, range=[0.999, 0.999, 0.999])
         #figure.suptitle(os.path.basename(input_fname))
 
-        outfile = f"outfiles/testdata_{idx}.pdf"
+        outfile = f"testdata_{idx}.pdf"
         outfiles.append(outfile)
         plt.tight_layout()
         plt.savefig(outfile)

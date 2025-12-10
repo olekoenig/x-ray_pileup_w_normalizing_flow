@@ -1,10 +1,12 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import os
+import shutil
 import torch
 from astropy.io import fits
 
 from code.config import SIXTEConfig, ModelConfig, MLConfig
+
 sixte_config = SIXTEConfig()
 model_config = ModelConfig()
 ml_config = MLConfig()
@@ -68,10 +70,14 @@ def _plot_ratio(axis, data1, data2, data1_label = "Target", data2_label = "predi
 
 def unite_pdfs(outfiles, outfilename = "testdata.pdf", remove = True):
     outstr = " ".join(outfiles)
-    os.system(f"pdfunite {outstr} {outfilename}")
-    print(f"Wrote {outfilename}")
-    if remove:
-        [os.system(f"rm {fp}") for fp in outfiles]
+    if shutil.which("pdfunite"):
+        os.system(f"pdfunite {outstr} {outfilename}")
+        print(f"Wrote {outfilename}")
+        if remove:
+            [os.system(f"rm {fp}") for fp in outfiles]
+    else:
+        print(f"Wrote {outstr}")
+        
 
 def _write_pha_file(channels, predicted_output, output_fname):
     de_piledup_spectrum = predicted_output.numpy()  # .astype(count_spectrum.dtype)
@@ -130,7 +136,7 @@ def evaluate_on_test_spectrum(model, test_dataset, phafile = False, plot_input_d
         else:
             axes.legend()
 
-        outfile = f"outfiles/testdata_{index}.pdf"
+        outfile = f"testdata_{index}.pdf"
         outfiles.append(outfile)
         plt.tight_layout()
         plt.savefig(outfile)

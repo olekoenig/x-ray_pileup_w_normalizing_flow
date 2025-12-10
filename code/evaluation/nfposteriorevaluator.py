@@ -385,7 +385,7 @@ class NFPosteriorEvaluator:
             print(f"\tPlotting {input_fname}")
             fig.suptitle(os.path.basename(input_fname))
 
-            outfile = f"outfiles/testdata_{idx}.pdf"
+            outfile = f"testdata_{idx}.pdf"
             outfiles.append(outfile)
             plt.tight_layout()
             plt.savefig(outfile)
