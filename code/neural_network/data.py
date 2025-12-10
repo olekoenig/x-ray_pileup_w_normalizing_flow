@@ -6,8 +6,8 @@ from torch.utils.data import Dataset, Subset, random_split
 import numpy as np
 from sklearn.preprocessing import StandardScaler
 
-from subs import print_dataset_statistics, plot_parameter_distributions
-from config import SIXTEConfig, MLConfig
+from code.subs import print_dataset_statistics, plot_parameter_distributions
+from code.config import SIXTEConfig, MLConfig
 
 sixte_config = SIXTEConfig()
 ml_config = MLConfig()
@@ -62,7 +62,7 @@ class PileupDataset(Dataset):
         # Transform of log grid to linear range, otherwise standardization biased towards high fluxes
         src_flux = np.log10(src_flux)
 
-        kt = fits.getval(filename, "KT", ext=1)
+        kt = fits.getval(filename, "PHOINDEX", ext=1)
         nh = fits.getval(filename, "NH", ext=1)
 
         return kt, src_flux, nh
@@ -97,6 +97,9 @@ def get_src_flux_from_filename(fname):
 
 def load_and_split_dataset():
     piledup = glob.glob(sixte_config.SPECDIR + "*cgs*piledup_circle0.fits")
+
+    if len(piledup) == 0:
+        print("WARNING: Could not glob the necessary files")
 
     torch.manual_seed(ml_config.dataloader_random_seed)
 

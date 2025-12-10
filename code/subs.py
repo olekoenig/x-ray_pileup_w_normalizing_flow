@@ -4,7 +4,7 @@ import os
 import torch
 from astropy.io import fits
 
-from config import SIXTEConfig, ModelConfig, MLConfig
+from code.config import SIXTEConfig, ModelConfig, MLConfig
 sixte_config = SIXTEConfig()
 model_config = ModelConfig()
 ml_config = MLConfig()
