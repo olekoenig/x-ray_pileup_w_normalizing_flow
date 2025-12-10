@@ -59,7 +59,7 @@ class SIXTEConfig():
     # Handling of the pfiles is important only when multiple simulations
     # are done in parallel.
     PFILESDIR = SCRATCHDIR + "pfiles/"
-    HEASOFT_PFILES = os.getenv("HEADAS") + "/syspfiles"
+    HEASOFT_PFILES = os.getenv("HEADAS") + "/syspfiles" if os.getenv("HEADAS") != None else ""
     GLOBAL_PFILES_DIR = os.getenv("HOME") + "/pfiles"
 
     # Folders of the data products on global disk (these products are not deleted)
