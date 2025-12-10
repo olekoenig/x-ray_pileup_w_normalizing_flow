@@ -1,10 +1,10 @@
 import torch
 import joblib
 
-from data import load_and_split_dataset
-from neuralnetwork import ConvSpectraFlow
-from nfposteriorevaluator import NFPosteriorEvaluator
-from config import MLConfig
+from code.neural_network.data import load_and_split_dataset
+from code.neural_network.neuralnetwork import ConvSpectraFlow
+from code.evaluate.nfposteriorevaluator import NFPosteriorEvaluator
+from code.config import MLConfig
 
 ml_config = MLConfig()
 

@@ -2,11 +2,10 @@ import torch
 import matplotlib.pyplot as plt
 import os
 
-from data import load_and_split_dataset
-from neuralnetwork import pileupNN
-import config
+from code.neural_network.data import load_and_split_dataset
+from code.neural_network.neuralnetwork import pileupNN
+import code.config
 
-plt.rcParams['text.usetex'] = True
 
 ACTIVATIONS = {}
 

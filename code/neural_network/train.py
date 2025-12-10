@@ -1,17 +1,13 @@
 import csv
 import numpy as np
 from dataclasses import dataclass,fields
-
 import torch
 from torch.utils.data import DataLoader
 import joblib
 
-#from code.data import load_and_split_dataset
 from code.config import MLConfig
-#from code.subs import plot_loss
 from code.neural_network.data import load_and_split_dataset
 from code.subs import plot_loss
-
 from code.neural_network.neuralnetwork import ConvSpectraFlow
 
 device = 'cpu'

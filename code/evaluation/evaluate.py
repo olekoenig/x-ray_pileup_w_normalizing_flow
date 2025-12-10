@@ -4,9 +4,9 @@ import random
 from typing import Tuple
 import joblib
     
-from data import load_and_split_dataset
-from neuralnetwork import ConvSpectraFlow
-from subs import *
+from code.neural_network.data import load_and_split_dataset
+from code.neural_network.neuralnetwork import ConvSpectraFlow
+from code.subs import *
 
 ml_config = MLConfig()
 sixte_config = SIXTEConfig()

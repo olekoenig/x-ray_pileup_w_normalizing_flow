@@ -9,10 +9,10 @@ import os
 import random
 from typing import Tuple
 
-from data import load_and_split_dataset
-from normalizing_flow import ConvSpectraFlow
-from config import MLConfig, SIXTEConfig
-from subs import *
+from code.neural_network.data import load_and_split_dataset
+from code.neural_network.normalizing_flow import ConvSpectraFlow
+from code.config import MLConfig, SIXTEConfig
+from code.subs import *
 
 ml_config = MLConfig()
 sixte_config = SIXTEConfig()

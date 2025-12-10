@@ -8,10 +8,10 @@ import joblib
 import os
 import random
 
-from data import load_and_split_dataset
-from neuralnetwork import ConvSpectraFlow
-from config import MLConfig, ModelConfig
-from subs import *
+from code.neural_network.data import load_and_split_dataset
+from code.neural_network.neuralnetwork import ConvSpectraFlow
+from code.config import MLConfig, ModelConfig
+from code.subs import load_emcee_fits, unite_pdfs
 
 ml_config = MLConfig()
 model_config = ModelConfig()
