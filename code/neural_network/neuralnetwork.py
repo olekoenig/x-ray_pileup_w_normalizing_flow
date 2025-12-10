@@ -1,7 +1,7 @@
 import torch
 import zuko
 
-from config import MLConfig
+from code.config import MLConfig
 ml_config = MLConfig()
 
 
