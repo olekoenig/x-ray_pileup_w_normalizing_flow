@@ -11,13 +11,10 @@ import random
 from data import load_and_split_dataset
 from neuralnetwork import ConvSpectraFlow
 from config import MLConfig, ModelConfig
-from subs import load_emcee_fits, unite_pdfs
+from subs import *
 
 ml_config = MLConfig()
 model_config = ModelConfig()
-
-plt.rcParams['text.usetex'] = True
-plt.rcParams['text.latex.preamble'] = r'\usepackage{amsmath}'
 
 
 class NFPosteriorEvaluator:

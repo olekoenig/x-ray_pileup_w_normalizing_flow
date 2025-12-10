@@ -11,8 +11,9 @@ sixte_config = SIXTEConfig()
 model_config = ModelConfig()
 ml_config = MLConfig()
 
-plt.rcParams['text.usetex'] = True
-plt.rcParams['text.latex.preamble'] = r'\usepackage{amsmath}'
+if shutil.which("latex"):
+    plt.rcParams['text.usetex'] = True
+    plt.rcParams['text.latex.preamble'] = r'\usepackage{amsmath}'
 
 LABEL_DICT = {"kt": r"$kT$ [keV]",
               "src_flux": r"Flux [$\mathrm{erg}\,\mathrm{cm}^{-2}\,\mathrm{s}^{-1}$]",

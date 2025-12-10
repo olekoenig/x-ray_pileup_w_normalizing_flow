@@ -17,9 +17,6 @@ from subs import *
 ml_config = MLConfig()
 sixte_config = SIXTEConfig()
 
-plt.rcParams['text.usetex'] = True
-plt.rcParams['text.latex.preamble'] = r'\usepackage{amsmath}'
-
 def load_emcee_fits(path, burn_in=0, thin=1, flux_factor=1.0):
     with fits.open(path) as hdul:
         rec = hdul[2].data

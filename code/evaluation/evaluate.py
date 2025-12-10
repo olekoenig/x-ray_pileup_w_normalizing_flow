@@ -11,9 +11,6 @@ from subs import *
 ml_config = MLConfig()
 sixte_config = SIXTEConfig()
 
-plt.rcParams['text.usetex'] = True
-plt.rcParams['text.latex.preamble'] = r'\usepackage{amsmath}'
-
 
 def evaluate_on_real_spectrum(model, real_pha_filename, out_pha_file = None):
     with fits.open(real_pha_filename) as hdulist:
